@@ -22,17 +22,6 @@ class NateNews:
         self.date = self._get_date()
         self.text = self._get_text()
     
-    # for making dataset or .ipynb    
-    def get_list(self):
-        return[
-            self.title,
-            self.category,
-            self.press,
-            self.date,
-            self.text,
-            self.url,
-        ]
-    
     # for forwarding to flask
     def get_dict(self):
         return{
