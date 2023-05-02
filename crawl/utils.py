@@ -11,14 +11,6 @@ import re
 
 
 LINK = 'https://news.nate.com/view/'
-COLUMNS = [
-    'title',
-    'category',
-    'press',
-    'date',
-    'content',
-    'url',
-]
 
 def get_news_df(
     news_list: List[NateNews]
@@ -31,11 +23,12 @@ def get_news_df(
     info_list = list()
     for news in news_list:
         try:
-            info_list.append(news.get_list())
+            info_list.append(news.get_dict())
         except:
-            print('Error occurs')
+            print('Error occurs', ends=' ')
             print(news.url)
-    return pd.DataFrame(info_list, columns=COLUMNS)
+
+    return pd.DataFrame(info_list)
 
 
 def get_news(

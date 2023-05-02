@@ -31,6 +31,7 @@ class NateNews:
             "date": self.date,
             "content": self.text,
             "image": self.image,
+            "url": self.url
         }
 
     ...
