@@ -15,7 +15,7 @@ class NateNews:
         assert res.status_code == 200 # to check valid request
         
         self.content = bs(res.text, 'html.parser')
-        
+        self.id = self.url.split('/')[-1].replace('n', '')
         self.title = self._get_title()
         self.category = self._get_category()
         self.press = self._get_press()
@@ -34,6 +34,17 @@ class NateNews:
             "url": self.url
         }
 
+    # for json file
+    def get_json(self):
+        return{
+            "id": self.id,
+            "category": self.category,
+            "text": f"{self.title}[SEP]{self.text}",
+            "img": f"{self.id}.png",
+            "img_url": self.image,
+            "url": self.url
+        }
+    
     ...
     
     def _get_title(self):
