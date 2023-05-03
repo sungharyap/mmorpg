@@ -1,13 +1,12 @@
 from bs4 import BeautifulSoup as bs
 from concurrent.futures import ThreadPoolExecutor
 from news import NateNews
-from preprocessing import text_cleaning
 from typing import List, Union
 
 import datetime as dt
 import pandas as pd
 import requests
-import re
+import time
 
 
 LINK = 'https://news.nate.com/view/'
@@ -53,8 +52,10 @@ def get_news(
         _news_list = list()
         for url in url_list:
             try:
+                time.sleep(0.5)
                 _news_list.append(_create(url))
             except:
+                # request errors
                 print(url)
     
     news_list = [news for news in _news_list if news]
