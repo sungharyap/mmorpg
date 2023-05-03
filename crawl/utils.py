@@ -10,6 +10,7 @@ import time
 
 
 LINK = 'https://news.nate.com/view/'
+CATEGORY=['sisa', 'spo', 'pol', 'eco', 'soc', 'int', 'its']
 
 def get_news_df(
     news_list: List[NateNews]
@@ -60,6 +61,45 @@ def get_news(
     
     news_list = [news for news in _news_list if news]
     return news_list
+
+def get_ranking(
+    date1: Union[int, None]=None,
+    date2: Union[int, None]=None,
+):
+    """Return articles of ranking from `date1` to `date2`
+    
+    Args:
+        date1 (Union[int, None], optional):
+            None -> `datetime.datetime.now()`
+        date2 (Union[int, None], optional): 
+            None -> `date1`
+    
+    Returns:
+        List[str]: url list of news from date1 to date2
+    """
+    date1 = date1 if date1 else dt.date.today().strftime('%Y%m%d')
+    date2 = date2 if date2 else date1
+    
+    date1 = int(date1)
+    date2 = int(date2)
+    
+    date_list = _get_date_list(date1, date2)
+    
+    ranking_url_list = [_ranking_url(date, news_category) for date in date_list for news_category in CATEGORY]
+    ranking_url_list = sum(ranking_url_list , [])
+    ranking_url_list = list(set(map(lambda x: f"https:{x[:35]}", ranking_url_list)))
+    
+    return ranking_url_list
+
+def _ranking_url(date:int, category:str):
+    # to prevent request error
+    print(date, category)
+    time.sleep(0.1)
+    req = requests.get(f"https://news.nate.com/rank/interest?sc={category}&p=day&date={date}")
+    soup = bs(req.text, 'html.parser')
+    main = soup.find('div', {'class': 'postRankNews'})
+    links = main.find_all('a')
+    return [link['href'] for link in links if 'nate.com/view' in link['href']]
 
 def get_urls(
     date1: Union[int, None]=None,
