@@ -52,12 +52,8 @@ def get_news(
     else:
         _news_list = list()
         for url in url_list:
-            try:
-                time.sleep(0.5)
-                _news_list.append(_create(url))
-            except:
-                # request errors
-                print(url)
+            time.sleep(0.5)
+            _news_list.append(_create(url))
     
     news_list = [news for news in _news_list if news]
     return news_list
@@ -272,4 +268,5 @@ def _create(url:str):
         print(f'{news.url} has too short article!')
         return None
     else:
+        print(f'{news.url}')
         return news
