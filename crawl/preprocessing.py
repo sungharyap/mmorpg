@@ -99,6 +99,8 @@ def text_cleaning(article: bs4.element.Tag):
     text = ('.').join(text.split('.')[:-1])
     text = re.sub('\n{3,}', '\n\n', text)
 
+    text = "[NO RELATION]" if re.search('사진.{0,4}기사.{0,12}관련.{0,5}없|사진.{0,4}기사.{0,6}연관.{0,5}없', text) else text
+
     return (text.strip() + '.', img_url)
 
 def _seperate_text(text):
@@ -117,7 +119,7 @@ def _seperate_text(text):
         img_url = r.group(1)
         try:
             caption:str = next(result_cap).group(1)
-            if re.match('사진.{0,4}기사.{0,6}관련.{0,5}없|사진.{0,4}기사.{0,6}연관.{0,5}없', caption):
+            if re.search('사진.{0,4}기사.{0,12}관련.{0,5}없|사진.{0,4}기사.{0,6}연관.{0,5}없', caption):
             # text remove
                 text = "[NO RELATION]"
         except:
