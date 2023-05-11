@@ -69,19 +69,20 @@ def text_cleaning(article: bs4.element.Tag):
     
     tmp = tmp.replace('\n', '').replace('\t', '').replace('\r', '') # 공백 제거
     pattern = "<br/?>" # <br> 태그 -> 개행으로 변경
-    tmp = re.sub(pattern, '\n', tmp)
+    tmp = re.sub(pattern, '[NEWLINE]', tmp)
     
     tmp = _remove_caption(tmp)
     tmp = _remove_html_tag(tmp)
     
     content = bs(tmp, 'html.parser') # 다시 parsing
     tmp = re.sub(' {2,}', ' ', content.text)
+    tmp = tmp.replace("[NEWLINE]", "\n")
 
     tmp = _remove_bracket(tmp)
     
     tmp = tmp.replace('·', ', ')
     tmp = ('').join([word for word in tmp if word.isalpha() or ord(word) < 128 or word == '…'])
-    tmp = tmp.replace(MESSAGE, '')
+    tmp = tmp.replace(MESSAGE, '')    
     
     tmp = _remove_email(tmp)
 
