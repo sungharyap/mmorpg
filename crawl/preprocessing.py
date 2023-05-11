@@ -93,7 +93,6 @@ def text_cleaning(article: bs4.element.Tag):
     
     # text -> article, images -> {IMAGE: CAPTION}
     text, img_url = _seperate_text(text)
-    
     text = _remove_link(text)
     text = _remove_newline(text)
     
@@ -116,6 +115,13 @@ def _seperate_text(text):
     
     for r in result_img:
         img_url = r.group(1)
+        try:
+            caption:str = next(result_cap).group(1)
+            if re.match('사진.{0,4}기사.{0,6}관련.{0,5}없|사진.{0,4}기사.{0,6}연관.{0,5}없', caption):
+            # text remove
+                text = "[NO RELATION]"
+        except:
+            pass
         break
         # try:
         #     image_dict[r.group(1)] = next(result_cap).group(1)
