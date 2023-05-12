@@ -62,10 +62,13 @@ def text_cleaning(article: bs4.element.Tag):
             Dict[str, str]: pair of image-caption
     """    
     article_text = str(article)
-    i = 0
+    # img alt 모두 제거
+    pattern = "alt=\"[^\"]+\""
+    tmp = re.sub(pattern, '', article_text)
+    
     # [] 내부 모두 제거
     pattern = '\[[^\]]*\]'
-    tmp = re.sub(pattern, '', article_text)
+    tmp = re.sub(pattern, '', tmp)
     
     tmp = tmp.replace('\n', '').replace('\t', '').replace('\r', '') # 공백 제거
     pattern = "<br/?>" # <br> 태그 -> 개행으로 변경
@@ -73,7 +76,7 @@ def text_cleaning(article: bs4.element.Tag):
     
     tmp = _remove_caption(tmp)
     tmp = _remove_html_tag(tmp)
-    
+
     content = bs(tmp, 'html.parser') # 다시 parsing
     tmp = re.sub(' {2,}', ' ', content.text)
     tmp = tmp.replace("[NEWLINE]", "\n")
@@ -167,11 +170,9 @@ def _remove_html_tag(text):
     """
     pattern = "</?p[^>]*>" # <p> or </p> -> 개행으로 변경
     text = re.sub(pattern, '\n', text)
-    
     pattern = "<caption>[^>]+>" # caption 제거
     text = re.sub(pattern, '', text)
-
-    pattern = "<a.+</a>" # [a] 태그 제거
+    pattern = "<a[^<]+</a>" # [a] 태그 제거
     text = re.sub(pattern, '', text)
 
     # pattern = "<img[^>]+>" # img들 모두 제거
@@ -217,10 +218,9 @@ def _remove_newline(text):
     text = re.sub('\n{2,}', '\n\n', text)
     text = re.sub('- \n', '\n\n', text)
     text = re.sub('\n-', '\n\n', text)
-    if len(text) < 2:
-        return ''
 
     text = text.strip()
+    if len(text) < 2:
+        return ''
     if text[0] == ']': text = text[1:]
-
     return text

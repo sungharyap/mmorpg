@@ -86,11 +86,11 @@ class NateNews:
     
     def _get_text(self):
         _text = self.content.find('div',{'id': 'articleContetns'})
-        # try:
-        #     article, self.image = text_cleaning(_text)
-        # except:
-        #     article, self.image = '', ''
-        article, self.image = text_cleaning(_text)
+        try:
+            article, self.image = text_cleaning(_text)
+        except:
+            article, self.image = '', ''
+        # article, self.image = text_cleaning(_text)
         return article
 
     ...
