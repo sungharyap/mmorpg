@@ -115,6 +115,7 @@ def _seperate_text(text):
     text = re.sub(pattern_cap, '', text)
     text = re.sub('\n{3,}', '\n\n', text)
     
+    img_url = ""
     for r in result_img:
         img_url = r.group(1)
         try:
@@ -129,6 +130,7 @@ def _seperate_text(text):
         #     image_dict[r.group(1)] = next(result_cap).group(1)
         # except:
         #     pass
+    text = text if img_url else ""
     return text, img_url
 
 def _remove_press(text):
