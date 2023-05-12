@@ -10,7 +10,7 @@ import time
 
 
 LINK = 'https://news.nate.com/view/'
-CATEGORY=['sisa', 'eco', 'soc', 'int', 'its']
+CATEGORY=['eco', 'soc', 'int', 'its']
 
 def get_news_df(
     news_list: List[NateNews]
@@ -260,7 +260,10 @@ def _create(url:str):
         return None
     else:
         # 특수 기사들은 제외
-        if '[속보]' in news.title or '[포토]' in news.title or '[부고]' in news.title:
+        if '[속보]' in news.title or\
+            '[포토]' in news.title or\
+            '[부고]' in news.title or\
+            '[인터뷰]' in news.title:
             print(f"{news.url} is not Normal News!")
             return None
 
