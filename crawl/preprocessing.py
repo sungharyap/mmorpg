@@ -66,6 +66,18 @@ def text_cleaning(article: bs4.element.Tag):
     pattern = "alt=\"[^\"]+\""
     tmp = re.sub(pattern, '', article_text)
     
+    # <b> 제거
+    pattern = '<b>[^<]*</b>'
+    tmp = re.sub(pattern, '', tmp)
+    
+    # <i> 제거
+    pattern = '<i>[^<]*</i>'
+    tmp = re.sub(pattern, '', tmp)
+    
+    # <strong> 제거
+    pattern = '<strong>[^<]*</strong>'
+    tmp = re.sub(pattern, '', tmp)
+    
     # [] 내부 모두 제거
     pattern = '\[[^\]]*\]'
     tmp = re.sub(pattern, '', tmp)
