@@ -57,6 +57,10 @@ logger = get_logger(__name__, log_level="INFO")
 
 DATASET_NAME_MAPPING = {
     "lambdalabs/pokemon-blip-captions": ("image", "text"),
+    "jeongwoo25/mmorpg_world": ("image", "text"),
+    "jeongwoo25/mmorpg_science": ("image", "text"),
+    "jeongwoo25/mmorpg_economy": ("image", "text"),
+    "jeongwoo25/mmorpg_society": ("image", "text"),
 }
 
 
@@ -687,7 +691,7 @@ def main():
             transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
             transforms.RandomHorizontalFlip() if args.random_flip else transforms.Lambda(lambda x: x),
             transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5]),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ]
     )
 
