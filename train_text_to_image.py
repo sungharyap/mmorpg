@@ -63,9 +63,14 @@ DATASET_NAME_MAPPING = {
     "jeongwoo25/mmorpg_society": ("image", "text"),
 }
 
+label2id = {"world": 0, "science": 1, "economy": 2, "society": 3}
 
-def log_validation(vae, text_encoder, tokenizer, unet, args, accelerator, weight_dtype, epoch):
+def log_validation(prompt_vector, vae, text_encoder, tokenizer, unet, args, accelerator, weight_dtype, epoch):
     logger.info("Running validation... ")
+
+
+    prompt_vector.requires_grad = False
+    category_prompt = prompt_vector[label2id[args.output_dir.split("_")[1]]]
 
     pipeline = StableDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
@@ -91,7 +96,9 @@ def log_validation(vae, text_encoder, tokenizer, unet, args, accelerator, weight
     images = []
     for i in range(len(args.validation_prompts)):
         with torch.autocast("cuda"):
-            image = pipeline(args.validation_prompts[i], num_inference_steps=20, generator=generator).images[0]
+            image = pipeline(
+                category_prompt, args.validation_prompts[i],
+                num_inference_steps=20, generator=generator).images[0]
 
         images.append(image)
 
@@ -121,11 +128,33 @@ def parse_args():
         "--input_pertubation", type=float, default=0, help="The scale of input pretubation. Recommended 0.1."
     )
     parser.add_argument(
-        "--pretrained_model_name_or_path",
+        "--dataloader_num_workers",
+        type=int,
+        default=0,
+        help=(
+            "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
+        ),
+    )
+    parser.add_argument(
+        "--prompt_tensor_pretrained_path",
+        type=str,
+        default=None,
+        help="Path to pretrained prompt tensor",
+    )
+    parser.add_argument(
+        "--prompt_tensor_save_path",
         type=str,
         default=None,
         required=True,
-        help="Path to pretrained model or model identifier from huggingface.co/models.",
+        help="Path to save prompt tensor",
+    )
+    parser.add_argument(
+        "--hidden_dim",
+        type=int,
+        default=768,
+        help=(
+            "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
+        ),
     )
     parser.add_argument(
         "--revision",
@@ -470,6 +499,10 @@ def main():
         args.pretrained_model_name_or_path, subfolder="tokenizer", revision=args.revision
     )
 
+    prompt_vector = torch.randn(4, args.hidden_dim) \
+        if not args.prompt_tensor_pretrained_path else \
+            torch.load(args.prompt_tensor_pretrained_path)
+
     def deepspeed_zero_init_disabled_context_manager():
         """
         returns either a context list that includes one that will disable zero.Init or an empty context list
@@ -610,7 +643,10 @@ def main():
         optimizer_cls = torch.optim.AdamW
 
     optimizer = optimizer_cls(
-        unet.parameters(),
+        [
+            {'params': unet.parameters()},
+            {'params': prompt_vector}
+        ],
         lr=args.learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
@@ -812,6 +848,9 @@ def main():
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
+    prompt_vector.requires_grad = True
+    category_prompt = prompt_vector[label2id[args.output_dir.split("_")[1]]]
+
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         train_loss = 0.0
@@ -824,7 +863,10 @@ def main():
 
             with accelerator.accumulate(unet):
                 # Convert images to latent space
-                latents = vae.encode(batch["pixel_values"].to(weight_dtype)).latent_dist.sample()
+                latents = vae.encode(
+                    category_prompt.repeat(len(batch), 1),
+                    batch["pixel_values"].to(weight_dtype)
+                ).latent_dist.sample()
                 latents = latents * vae.config.scaling_factor
 
                 # Sample noise that we'll add to the latents
@@ -905,6 +947,7 @@ def main():
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                         accelerator.save_state(save_path)
                         logger.info(f"Saved state to {save_path}")
+                        torch.save(prompt_vector, args.prompt_tensor_save_path)
 
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             progress_bar.set_postfix(**logs)
@@ -919,6 +962,7 @@ def main():
                     ema_unet.store(unet.parameters())
                     ema_unet.copy_to(unet.parameters())
                 log_validation(
+                    prompt_vector,
                     vae,
                     text_encoder,
                     tokenizer,
