@@ -69,6 +69,8 @@ DATASET_NAME_MAPPING = {
     "angdong/nate-news-society": ("image", "text"),
 }
 
+STEPS = []
+
 label2id = {"world": 0, "science": 1, "economy": 2, "society": 3}
 
 def log_validation(prompt_vector, vae, text_encoder, tokenizer, unet, args, accelerator, weight_dtype, global_step, dataset, config):
@@ -372,7 +374,7 @@ def parse_args():
     parser.add_argument(
         "--checkpointing_steps",
         type=int,
-        default=500,
+        default=20000,
         help=(
             "Save a checkpoint of the training state every X updates. These checkpoints are only suitable for resuming"
             " training using `--resume_from_checkpoint`."
@@ -964,7 +966,7 @@ def main():
             progress_bar.set_postfix(**logs)
 
             if accelerator.is_main_process:
-                if global_step % args.validation_steps == 0:
+                if global_step % args.validation_steps == 0 and global_step not in STEPS:
                     if args.use_ema:
                         # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
                         ema_unet.store(unet.parameters())
@@ -982,6 +984,7 @@ def main():
                         dataset["validation"],
                         config="validation",
                     )
+                    STEPS.append(global_step)
                     if args.use_ema:
                         # Switch back to the original UNet parameters.
                         ema_unet.restore(unet.parameters())
