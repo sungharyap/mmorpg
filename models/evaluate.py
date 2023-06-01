@@ -37,7 +37,7 @@ def calculate_fid(real_dir: str, fake_dir: str, count=5000):
     Example::
         >>> fid = calculate_fid('real/*.jpg', 'fake/*.jpg')
         >>> print('FID Score: ', fid)
-    """"
+    """
     
     real_features = get_features(get_images(real_dir), count)
     fake_features = get_features(get_images(fake_dir), count)
