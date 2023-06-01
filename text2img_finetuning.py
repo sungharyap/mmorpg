@@ -23,6 +23,7 @@ from pathlib import Path
 import accelerate
 import datasets
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
@@ -46,6 +47,7 @@ from diffusers.training_utils import EMAModel
 from diffusers.utils import check_min_version, deprecate, is_wandb_available
 from diffusers.utils.import_utils import is_xformers_available
 
+from models import fid_score
 
 if is_wandb_available():
     import wandb
@@ -61,16 +63,15 @@ DATASET_NAME_MAPPING = {
     "jeongwoo25/mmorpg_science": ("image", "text"),
     "jeongwoo25/mmorpg_economy": ("image", "text"),
     "jeongwoo25/mmorpg_society": ("image", "text"),
+    "angdong/nate-news-world": ("image", "text"),
+    "angdong/nate-news-science": ("image", "text"),
+    "angdong/nate-news-economy": ("image", "text"),
+    "angdong/nate-news-society": ("image", "text"),
 }
 
-label2id = {"world": 0, "science": 1, "economy": 2, "society": 3}
 
-def log_validation(prompt_vector, vae, text_encoder, tokenizer, unet, args, accelerator, weight_dtype, epoch):
+def log_validation(vae, text_encoder, tokenizer, unet, args, accelerator, weight_dtype, global_step, dataset, config):
     logger.info("Running validation... ")
-
-
-    prompt_vector.requires_grad = False
-    category_prompt = prompt_vector[label2id[args.output_dir.split("_")[1]]]
 
     pipeline = StableDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
@@ -93,30 +94,18 @@ def log_validation(prompt_vector, vae, text_encoder, tokenizer, unet, args, acce
     else:
         generator = torch.Generator(device=accelerator.device).manual_seed(args.seed)
 
-    images = []
-    for i in range(len(args.validation_prompts)):
+    fids = []
+    for idx, e in enumerate(tqdm(dataset)):
         with torch.autocast("cuda"):
-            image = pipeline(
-                category_prompt, args.validation_prompts[i],
-                num_inference_steps=20, generator=generator).images[0]
+            image = pipeline(e["text"], num_inference_steps=25, generator=generator).images[0]
+            image.save(os.path.join(args.output_dir, config, "fake", f"{idx}-{global_step}.png"))
+            
+            real = os.path.join(os.getcwd(), args.output_dir, config, "real", f"{idx}.png")
+            fake = os.path.join(os.getcwd(), args.output_dir, config, "fake", f"{idx}-{global_step}.png")
+            fid = fid_score.calculate_fid_given_paths([real, fake], 1, "cuda", 2048, min(len(os.sched_getaffinity(0)), 8))
+        fids.append(fid)
 
-        images.append(image)
-
-    for tracker in accelerator.trackers:
-        if tracker.name == "tensorboard":
-            np_images = np.stack([np.asarray(img) for img in images])
-            tracker.writer.add_images("validation", np_images, epoch, dataformats="NHWC")
-        elif tracker.name == "wandb":
-            tracker.log(
-                {
-                    "validation": [
-                        wandb.Image(image, caption=f"{i}: {args.validation_prompts[i]}")
-                        for i, image in enumerate(images)
-                    ]
-                }
-            )
-        else:
-            logger.warn(f"image logging not implemented for {tracker.name}")
+    accelerator.log({f"FID_{config}": sum(fids)/len(fids)}, step=global_step)
 
     del pipeline
     torch.cuda.empty_cache()
@@ -128,33 +117,11 @@ def parse_args():
         "--input_pertubation", type=float, default=0, help="The scale of input pretubation. Recommended 0.1."
     )
     parser.add_argument(
-        "--dataloader_num_workers",
-        type=int,
-        default=0,
-        help=(
-            "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
-        ),
-    )
-    parser.add_argument(
-        "--prompt_tensor_pretrained_path",
-        type=str,
-        default=None,
-        help="Path to pretrained prompt tensor",
-    )
-    parser.add_argument(
-        "--prompt_tensor_save_path",
+        "--pretrained_model_name_or_path",
         type=str,
         default=None,
         required=True,
-        help="Path to save prompt tensor",
-    )
-    parser.add_argument(
-        "--hidden_dim",
-        type=int,
-        default=768,
-        help=(
-            "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
-        ),
+        help="Path to pretrained model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
         "--revision",
@@ -414,6 +381,12 @@ def parse_args():
         help="Run validation every X epochs.",
     )
     parser.add_argument(
+        "--validation_steps",
+        type=int,
+        default=1000,
+        help="Run validation every X steps.",
+    )
+    parser.add_argument(
         "--tracker_project_name",
         type=str,
         default="text2image-fine-tune",
@@ -487,6 +460,10 @@ def main():
     if accelerator.is_main_process:
         if args.output_dir is not None:
             os.makedirs(args.output_dir, exist_ok=True)
+            os.makedirs(os.path.join(args.output_dir, "validation", "real"), exist_ok=True)
+            os.makedirs(os.path.join(args.output_dir, "validation", "fake"), exist_ok=True)
+            os.makedirs(os.path.join(args.output_dir, "test", "real"), exist_ok=True)
+            os.makedirs(os.path.join(args.output_dir, "test", "fake"), exist_ok=True)
 
         if args.push_to_hub:
             repo_id = create_repo(
@@ -498,10 +475,6 @@ def main():
     tokenizer = CLIPTokenizer.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="tokenizer", revision=args.revision
     )
-
-    prompt_vector = torch.randn(4, args.hidden_dim) \
-        if not args.prompt_tensor_pretrained_path else \
-            torch.load(args.prompt_tensor_pretrained_path)
 
     def deepspeed_zero_init_disabled_context_manager():
         """
@@ -643,10 +616,7 @@ def main():
         optimizer_cls = torch.optim.AdamW
 
     optimizer = optimizer_cls(
-        [
-            {'params': unet.parameters()},
-            {'params': prompt_vector}
-        ],
+        unet.parameters(),
         lr=args.learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
@@ -664,7 +634,6 @@ def main():
             args.dataset_name,
             args.dataset_config_name,
             cache_dir=args.cache_dir,
-            data_files="train.zip",
         )
     else:
         data_files = {}
@@ -678,6 +647,14 @@ def main():
         # See more about loading custom images at
         # https://huggingface.co/docs/datasets/v2.4.0/en/image_load#imagefolder
 
+    # Save real images
+    k = ["validation", "test"]
+    for config in k:
+        df = pd.DataFrame(dataset[config]["text"], columns=["text"])
+        df.to_csv(os.path.join(args.output_dir, config, "text.csv"), header=False)
+        for idx, e in enumerate(dataset[config]):
+            e['image'].save(os.path.join(args.output_dir, config, "real", f"{idx}.png"))
+    
     # Preprocessing the datasets.
     # We need to tokenize inputs and targets.
     column_names = dataset["train"].column_names
@@ -848,9 +825,6 @@ def main():
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
-    prompt_vector.requires_grad = True
-    category_prompt = prompt_vector[label2id[args.output_dir.split("_")[1]]]
-
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         train_loss = 0.0
@@ -863,10 +837,7 @@ def main():
 
             with accelerator.accumulate(unet):
                 # Convert images to latent space
-                latents = vae.encode(
-                    category_prompt.repeat(len(batch), 1),
-                    batch["pixel_values"].to(weight_dtype)
-                ).latent_dist.sample()
+                latents = vae.encode(batch["pixel_values"].to(weight_dtype)).latent_dist.sample()
                 latents = latents * vae.config.scaling_factor
 
                 # Sample noise that we'll add to the latents
@@ -947,34 +918,54 @@ def main():
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                         accelerator.save_state(save_path)
                         logger.info(f"Saved state to {save_path}")
-                        torch.save(prompt_vector, args.prompt_tensor_save_path)
 
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             progress_bar.set_postfix(**logs)
-
+            
+            if accelerator.is_main_process:
+                if global_step % args.validation_steps == 0:
+                    if args.use_ema:
+                        # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
+                        ema_unet.store(unet.parameters())
+                        ema_unet.copy_to(unet.parameters())
+                    log_validation(
+                        vae,
+                        text_encoder,
+                        tokenizer,
+                        unet,
+                        args,
+                        accelerator,
+                        weight_dtype,
+                        global_step,
+                        dataset["validation"],
+                        config="validation",
+                    )
+                    if args.use_ema:
+                        # Switch back to the original UNet parameters.
+                        ema_unet.restore(unet.parameters())
+            
             if global_step >= args.max_train_steps:
+                if accelerator.is_main_process:
+                    if args.use_ema:
+                        # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
+                        ema_unet.store(unet.parameters())
+                        ema_unet.copy_to(unet.parameters())
+                    log_validation(
+                        vae,
+                        text_encoder,
+                        tokenizer,
+                        unet,
+                        args,
+                        accelerator,
+                        weight_dtype,
+                        global_step,
+                        dataset["test"],
+                        config="test",
+                    )
+                    if args.use_ema:
+                        # Switch back to the original UNet parameters.
+                        ema_unet.restore(unet.parameters())
                 break
-
-        if accelerator.is_main_process:
-            if args.validation_prompts is not None and epoch % args.validation_epochs == 0:
-                if args.use_ema:
-                    # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
-                    ema_unet.store(unet.parameters())
-                    ema_unet.copy_to(unet.parameters())
-                log_validation(
-                    prompt_vector,
-                    vae,
-                    text_encoder,
-                    tokenizer,
-                    unet,
-                    args,
-                    accelerator,
-                    weight_dtype,
-                    global_step,
-                )
-                if args.use_ema:
-                    # Switch back to the original UNet parameters.
-                    ema_unet.restore(unet.parameters())
 
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
