@@ -1,11 +1,9 @@
 export MODEL_NAME="Bingsu/my-korean-stable-diffusion-v1-5"
 export dataset_name="angdong/nate-news-science"
-export cache_dir="/home/meohee/mnt/jeongwoo/.cache"
 
 accelerate launch --mixed_precision="fp16" --num_processes=1 --num_machines=1 text2img_finetuning.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
   --dataset_name=$dataset_name \
-  --cache_dir=$cache_dir \
   --resolution=512 --center_crop --random_flip \
   --train_batch_size=1 \
   --gradient_accumulation_steps=4 \

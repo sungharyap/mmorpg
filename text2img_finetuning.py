@@ -922,7 +922,7 @@ def main():
 
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             progress_bar.set_postfix(**logs)
-            
+
             if accelerator.is_main_process:
                 if global_step % args.validation_steps == 0 and global_step not in STEPS:
                     if args.use_ema:
