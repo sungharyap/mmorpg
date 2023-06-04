@@ -71,6 +71,10 @@ DATASET_NAME_MAPPING = {
 
 STEPS = []
 
+os.environ['TORCH_USE_CUDA_DSA'] = "1"
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 label2id = {"world": 0, "science": 1, "economy": 2, "society": 3}
 
 def log_validation(prompt_vector, vae, text_encoder, tokenizer, unet, args, accelerator, weight_dtype, global_step, dataset, config):
@@ -78,7 +82,8 @@ def log_validation(prompt_vector, vae, text_encoder, tokenizer, unet, args, acce
 
 
     prompt_vector.requires_grad = False
-    category_prompt = prompt_vector[label2id[args.output_dir.split("_")[1]]]
+    
+    category_prompt = prompt_vector[label2id[args.output_dir.split("-")[1]]]
 
     pipeline = StableDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
@@ -104,7 +109,7 @@ def log_validation(prompt_vector, vae, text_encoder, tokenizer, unet, args, acce
     fids = []
     for idx, e in enumerate(tqdm(dataset)):
         with torch.autocast("cuda"):
-            image = pipeline(category_prompt, e["text"], num_inference_steps=25, generator=generator).images[0]
+            image = pipeline(e["text"], num_inference_steps=25, generator=generator,category_prompt = category_prompt).images[0]
             image.save(os.path.join(args.output_dir, config, "fake", f"{idx}-{global_step}.png"))
             
             real = os.path.join(os.getcwd(), args.output_dir, config, "real", f"{idx}.png")
@@ -122,6 +127,13 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
     parser.add_argument(
         "--input_pertubation", type=float, default=0, help="The scale of input pretubation. Recommended 0.1."
+    )
+    parser.add_argument(
+        "--pretrained_model_name_or_path",
+        type=str,
+        default=None,
+        required=True,
+        help="Path to pretrained model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
         "--dataloader_num_workers",
@@ -318,14 +330,6 @@ def parse_args():
         help=(
             "Revision of pretrained non-ema model identifier. Must be a branch, tag or git identifier of the local or"
             " remote repository specified with --pretrained_model_name_or_path."
-        ),
-    )
-    parser.add_argument(
-        "--dataloader_num_workers",
-        type=int,
-        default=0,
-        help=(
-            "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
         ),
     )
     parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
@@ -862,7 +866,7 @@ def main():
     progress_bar.set_description("Steps")
 
     prompt_vector.requires_grad = True
-    category_prompt = prompt_vector[label2id[args.output_dir.split("_")[1]]]
+    category_prompt = prompt_vector[label2id[args.output_dir.split("-")[1]]]
 
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
@@ -876,10 +880,7 @@ def main():
 
             with accelerator.accumulate(unet):
                 # Convert images to latent space
-                latents = vae.encode(
-                    category_prompt.repeat(len(batch), 1),
-                    batch["pixel_values"].to(weight_dtype)
-                ).latent_dist.sample()
+                latents = vae.encode(batch["pixel_values"].to(weight_dtype)).latent_dist.sample()
                 latents = latents * vae.config.scaling_factor
 
                 # Sample noise that we'll add to the latents
@@ -904,8 +905,11 @@ def main():
                     noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
                 # Get the text embedding for conditioning
-                encoder_hidden_states = text_encoder(batch["input_ids"])[0]
-
+                encoder_hidden_states = text_encoder(
+                    prompt=category_prompt,
+                    input_ids=batch["input_ids"]
+                )[0]
+        
                 # Get the target for loss depending on the prediction type
                 if noise_scheduler.config.prediction_type == "epsilon":
                     target = noise
