@@ -14,7 +14,6 @@ def map_model(model_type):
         tokenizer = ElectraTokenizer.from_pretrained("monologg/koelectra-small-v3-discriminator")
 
         return TextToImageBaseline(encoder, MLP(256, 512, 100), GANDecoder(1, 100, 64, 3)), tokenizer
-<<<<<<< HEAD
     
     if model_type == "baseline-clip":
         from transformers import ElectraModel, ElectraTokenizer
@@ -27,8 +26,6 @@ def map_model(model_type):
 
         return TextToImageBaseline(encoder, MLP(38, 512, 100), GANDecoder(1, 100, 64, 3)), tokenizer
 
-=======
->>>>>>> main
     if model_type in ["baseline-sd", "baseline-stable_diffusion"]:
         """
         Beware that this returns pipeline not torch module
@@ -38,11 +35,7 @@ def map_model(model_type):
         repo = "Bingsu/my-korean-stable-diffusion-v1-5"
         euler_ancestral_scheduler = EulerAncestralDiscreteScheduler.from_config(repo, subfolder="scheduler")
         pipe = StableDiffusionPipeline.from_pretrained(
-<<<<<<< HEAD
             repo, scheduler=euler_ancestral_scheduler, torch_dtype=torch.float32,
-=======
-            repo, scheduler=euler_ancestral_scheduler, torch_dtype=torch.float16,
->>>>>>> main
         )
         pipe.to("cuda" if torch.cuda.is_available() else "cpu")
 
