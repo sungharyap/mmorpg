@@ -47,7 +47,7 @@ from diffusers.training_utils import EMAModel
 from diffusers.utils import check_min_version, deprecate, is_wandb_available
 from diffusers.utils.import_utils import is_xformers_available
 
-from models import fid_score
+from utils import fid_score
 
 if is_wandb_available():
     import wandb
