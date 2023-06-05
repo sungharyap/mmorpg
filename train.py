@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch import optim
 
-from utils import get_data, split_dataset
+from utils.utils import get_data, split_dataset
 from models.map_model import map_model
 
 DATA_PATH = './../mmorpg_data/'
