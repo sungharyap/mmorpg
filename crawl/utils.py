@@ -10,7 +10,7 @@ import time
 
 
 LINK = 'https://news.nate.com/view/'
-CATEGORY=['sisa', 'spo', 'pol', 'eco', 'soc', 'int', 'its']
+CATEGORY=['eco', 'soc', 'int', 'its']
 
 def get_news_df(
     news_list: List[NateNews]
@@ -85,7 +85,8 @@ def get_ranking(
     ranking_url_list = sum(ranking_url_list , [])
     ranking_url_list = list(set(map(lambda x: f"https:{x[:35]}", ranking_url_list)))
     
-    return ranking_url_list
+    # Sorting
+    return sorted(ranking_url_list)
 
 def _ranking_url(date:int, category:str):
     # to prevent request error
@@ -259,12 +260,19 @@ def _create(url:str):
         return None
     else:
         # 특수 기사들은 제외
-        if '[속보]' in news.title or '[포토]' in news.title or '[부고]' in news.title:
+        if '[속보]' in news.title or\
+            '[포토]' in news.title or\
+            '[부고]' in news.title or\
+            '[인터뷰]' in news.title:
             print(f"{news.url} is not Normal News!")
             return None
 
+    if "[NO RELATION]" in news.text:
+        print(f'{news.url} has a low-relevant image!')
+        return None
+
     # 기사가 있다 -> 길이 확인하기, 길이가 짧을 시에 제외
-    if len(news.text) < 3:
+    if len(news.text) < 20:
         print(f'{news.url} has too short article!')
         return None
     else:

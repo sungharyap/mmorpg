@@ -90,6 +90,7 @@ class NateNews:
             article, self.image = text_cleaning(_text)
         except:
             article, self.image = '', ''
+        # article, self.image = text_cleaning(_text)
         return article
 
     ...

@@ -8,6 +8,8 @@ MESSAGE = '지원하지 않는 브라우저로 접근하셨습니다.\nInternet 
 
 # 언론사별 불용어 지정
 PRESS = [
+    # 중앙일보
+    '중앙일보, 무단 전재 및 재배포 금지',
     # 노컷뉴스
     'CBS노컷뉴스는 여러분의 제보로 함께 세상을 바꿉니다. 각종 비리와 부당대우, 사건사고와 미담 등 모든 얘깃거리를 알려주세요.이메일 : 카카오톡 : @노컷뉴스사이트 : https://url.kr/b71afn',
     # 뉴스1
@@ -62,26 +64,42 @@ def text_cleaning(article: bs4.element.Tag):
             Dict[str, str]: pair of image-caption
     """    
     article_text = str(article)
-    i = 0
+    # img alt 모두 제거
+    pattern = "alt=\"[^\"]+\""
+    tmp = re.sub(pattern, '', article_text)
+    
+    # <b> 제거
+    pattern = '<b>[^<]*</b>'
+    tmp = re.sub(pattern, '', tmp)
+    
+    # <i> 제거
+    pattern = '<i>[^<]*</i>'
+    tmp = re.sub(pattern, '', tmp)
+    
+    # <strong> 제거
+    pattern = '<strong>[^<]*</strong>'
+    tmp = re.sub(pattern, '', tmp)
+    
     # [] 내부 모두 제거
     pattern = '\[[^\]]*\]'
-    tmp = re.sub(pattern, '', article_text)
+    tmp = re.sub(pattern, '', tmp)
     
     tmp = tmp.replace('\n', '').replace('\t', '').replace('\r', '') # 공백 제거
     pattern = "<br/?>" # <br> 태그 -> 개행으로 변경
-    tmp = re.sub(pattern, '\n', tmp)
+    tmp = re.sub(pattern, '[NEWLINE]', tmp)
     
     tmp = _remove_caption(tmp)
     tmp = _remove_html_tag(tmp)
-    
+
     content = bs(tmp, 'html.parser') # 다시 parsing
     tmp = re.sub(' {2,}', ' ', content.text)
+    tmp = tmp.replace("[NEWLINE]", "\n")
 
     tmp = _remove_bracket(tmp)
     
     tmp = tmp.replace('·', ', ')
     tmp = ('').join([word for word in tmp if word.isalpha() or ord(word) < 128 or word == '…'])
-    tmp = tmp.replace(MESSAGE, '')
+    tmp = tmp.replace(MESSAGE, '')    
     
     tmp = _remove_email(tmp)
 
@@ -92,12 +110,13 @@ def text_cleaning(article: bs4.element.Tag):
     
     # text -> article, images -> {IMAGE: CAPTION}
     text, img_url = _seperate_text(text)
-    
     text = _remove_link(text)
     text = _remove_newline(text)
     
     text = ('.').join(text.split('.')[:-1])
     text = re.sub('\n{3,}', '\n\n', text)
+
+    text = "[NO RELATION]" if re.search('사진.{0,4}기사.{0,12}관련.{0,5}없|사진.{0,4}기사.{0,6}연관.{0,5}없', text) else text
 
     return (text.strip() + '.', img_url)
 
@@ -113,13 +132,22 @@ def _seperate_text(text):
     text = re.sub(pattern_cap, '', text)
     text = re.sub('\n{3,}', '\n\n', text)
     
+    img_url = ""
     for r in result_img:
         img_url = r.group(1)
+        try:
+            caption:str = next(result_cap).group(1)
+            if re.search('사진.{0,4}기사.{0,12}관련.{0,5}없|사진.{0,4}기사.{0,6}연관.{0,5}없', caption):
+            # text remove
+                text = "[NO RELATION]"
+        except:
+            pass
         break
         # try:
         #     image_dict[r.group(1)] = next(result_cap).group(1)
         # except:
         #     pass
+    text = text if img_url else ""
     return text, img_url
 
 def _remove_press(text):
@@ -156,11 +184,9 @@ def _remove_html_tag(text):
     """
     pattern = "</?p[^>]*>" # <p> or </p> -> 개행으로 변경
     text = re.sub(pattern, '\n', text)
-    
     pattern = "<caption>[^>]+>" # caption 제거
     text = re.sub(pattern, '', text)
-
-    pattern = "<a.+</a>" # [a] 태그 제거
+    pattern = "<a[^<]+</a>" # [a] 태그 제거
     text = re.sub(pattern, '', text)
 
     # pattern = "<img[^>]+>" # img들 모두 제거
@@ -206,10 +232,9 @@ def _remove_newline(text):
     text = re.sub('\n{2,}', '\n\n', text)
     text = re.sub('- \n', '\n\n', text)
     text = re.sub('\n-', '\n\n', text)
-    if len(text) < 2:
-        return ''
 
     text = text.strip()
+    if len(text) < 2:
+        return ''
     if text[0] == ']': text = text[1:]
-
     return text
