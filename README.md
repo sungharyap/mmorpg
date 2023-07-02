@@ -1,12 +1,15 @@
 # MmoRPG
 Multi-modal Realistic Picture Generation for news
 
+<br>
+
 ## Dataset
 
 __How to collect__
 1. Collect 100K __Korean__ news data in [nate news](https://news.nate.com/)
     * _2020.01.01_ ~ _2022.12.31_
 <br>
+
 2. Exclude
     * 3 Topics: Entertainment, Politics, Sports
     * Short articles
@@ -14,6 +17,7 @@ __How to collect__
     * Articles that have <u>No or low</u> relevant image
     * Articles that have <u>gif</u> image
 <br>
+
 3. Preprocessing
     * Remove <u>watermarks</u>
     * Text preprocessing
@@ -52,6 +56,7 @@ __How to collect__
         |   Total    | 95K  |
 
     
+<br>
 
 ## Model
 
@@ -62,6 +67,8 @@ __How to collect__
 * Backbone model: stable diffusion([Rombach _et al_.](https://arxiv.org/pdf/2112.10752.pdf))
 * __Prompt tuning__: Make a learnable prompt (__Topic__)  and train the vector while freezing the backbone
 * train with text (_news title_) and image (_news image_) pairs
+
+<br>
 
 ## Result
 
